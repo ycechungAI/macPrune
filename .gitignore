@@ -1,0 +1,7 @@
+.build/
+build/
+*.app
+.DS_Store
+
+# Personal export of the Do Not Prune list
+do-not-prune.txt
