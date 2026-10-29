@@ -10,5 +10,5 @@ Planned for the next version:
 Later:
 
 - Signed and notarized download, so you don't have to build from source
-- App icon
+- Window transparency slider, from fully opaque down to 50%, so a pinned window can sit over your work
 - Lower idle CPU by updating only the rows that changed

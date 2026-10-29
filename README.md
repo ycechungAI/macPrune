@@ -1,3 +1,5 @@
+<p align="center"><img src="Resources/AppIcon.png" width="128" alt="macPrune icon"></p>
+
 # macPrune
 
 **See what's really running on your Mac, and cut what you don't need.**
@@ -110,6 +112,7 @@ Sources/Prune/
   CompactView.swift   Compact top-10 mode
   SettingsView.swift  Settings window
 scripts/build-app.sh  Builds and ad-hoc signs build/Prune.app
+scripts/make-icon.swift  Draws Resources/AppIcon.icns (swift scripts/make-icon.swift)
 ```
 
 ### Developer switches
