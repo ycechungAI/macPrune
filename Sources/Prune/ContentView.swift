@@ -7,6 +7,7 @@ struct ContentView: View {
     @AppStorage("pinned") private var pinned = false
     @AppStorage("compact") private var compact = false
     @AppStorage("hideKept") private var hideKept = false
+    @AppStorage("hideCritical") private var hideCritical = false
     @AppStorage(Prefs.showOthers) private var showOthers = true
     @Local private var selection = Set<pid_t>()
     @Local private var sortOrder = [KeyPathComparator(\ProcInfo.realMem, order: .reverse)]
@@ -64,7 +65,7 @@ struct ContentView: View {
 
     private var mainTable: some View {
         VStack(spacing: 0) {
-            Table(store.rows(tree: treeMode, filter: search, sort: sortOrder, hideKept: hideKept),
+            Table(store.rows(tree: treeMode, filter: search, sort: sortOrder, hideKept: hideKept, hideCritical: hideCritical),
                   children: \.children, selection: $selection, sortOrder: $sortOrder) {
                 TableColumn("Process Name", value: \.name) { p in
                     cell(p) {
@@ -109,7 +110,10 @@ struct ContentView: View {
             } primaryAction: { _ in
                 showInspector = true
             }
-            .onDeleteCommand { if !selection.isEmpty { killTargets = Array(selection) } }
+            .onDeleteCommand {
+                let endable = selection.filter { store.procs[$0].map { !Cleaner.isCritical($0) } ?? false }
+                if !endable.isEmpty { killTargets = Array(endable) }
+            }
             .searchable(text: $search, placement: .toolbar, prompt: "Name, PID or path")
 
             statusBar
@@ -119,9 +123,12 @@ struct ContentView: View {
     /// Wraps a table cell, tinting it green when the process is on the Do Not Prune list.
     private func cell<Content: View>(_ p: ProcInfo, @ViewBuilder _ content: () -> Content) -> some View {
         let kept = store.isKept(p)
+        let critical = Cleaner.isCritical(p)
         // The fill bleeds past the cell into the column gaps so the row reads as one green band.
         return content()
             .frame(maxWidth: .infinity, alignment: .leading)
+            .opacity(critical ? 0.4 : 1)
+            .help(critical ? "Mission-critical macOS process: can't be ended from Prune" : "")
             .background {
                 if kept { Rectangle().fill(Color.green.opacity(0.2)).padding(.horizontal, -8).padding(.vertical, -4) }
             }
@@ -129,8 +136,9 @@ struct ContentView: View {
 
     @ViewBuilder
     private func contextMenu(for pids: Set<pid_t>) -> some View {
-        Button("Quit…") { killTargets = Array(pids) }
-        Button("Force Quit") { store.end(Array(pids), force: true) }
+        let endable = pids.filter { store.procs[$0].map { !Cleaner.isCritical($0) } ?? false }
+        Button("Quit…") { killTargets = Array(endable) }.disabled(endable.isEmpty)
+        Button("Force Quit") { store.end(Array(endable), force: true) }.disabled(endable.isEmpty)
         Divider()
         if pids.count == 1, let pid = pids.first, let p = store.procs[pid] {
             Button(store.isKept(p) ? "Remove from Do Not Prune List" : "Add to Do Not Prune List") {
@@ -185,7 +193,9 @@ struct ContentView: View {
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
-            Button { killTargets = Array(selection) } label: { Label("End Process", systemImage: "xmark.octagon") }
+            Button {
+                killTargets = selection.filter { store.procs[$0].map { !Cleaner.isCritical($0) } ?? false }
+            } label: { Label("End Process", systemImage: "xmark.octagon") }
                 .help("Quit the selected processes (⌫)")
                 .disabled(selection.isEmpty)
         }
@@ -213,6 +223,10 @@ struct ContentView: View {
                     Label("Other Users", systemImage: showOthers ? "person.2.fill" : "person.2")
                 }
                 .help(showOthers ? "Hide processes owned by other users and system accounts" : "Show processes owned by other users and system accounts (not root)")
+                Toggle(isOn: $hideCritical) {
+                    Label("Hide Critical", systemImage: hideCritical ? "lock.slash" : "lock")
+                }
+                .help(hideCritical ? "Show mission-critical macOS processes" : "Hide mission-critical macOS processes")
                 Toggle(isOn: $hideKept) {
                     Label("Hide Protected", systemImage: hideKept ? "eye.slash" : "leaf")
                 }

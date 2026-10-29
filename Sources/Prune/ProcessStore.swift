@@ -150,13 +150,15 @@ final class ProcessStore: ObservableObject {
         return isKept(owner)
     }
 
-    func rows(tree: Bool, filter: String, sort: [KeyPathComparator<ProcInfo>], hideKept: Bool = false) -> [ProcInfo] {
+    func rows(tree: Bool, filter: String, sort: [KeyPathComparator<ProcInfo>], hideKept: Bool = false, hideCritical: Bool = false) -> [ProcInfo] {
         let q = filter.trimmingCharacters(in: .whitespaces).lowercased()
         func matches(_ p: ProcInfo) -> Bool {
             q.isEmpty || p.name.lowercased().contains(q) || String(p.id) == q || p.path.lowercased().contains(q)
         }
         let keep = keepSet
-        func visible(_ p: ProcInfo) -> Bool { !hideKept || keep.isEmpty || !isProtectedFamily(p) }
+        func visible(_ p: ProcInfo) -> Bool {
+            (!hideKept || keep.isEmpty || !isProtectedFamily(p)) && !(hideCritical && Cleaner.isCritical(p))
+        }
         guard tree else { return procs.values.filter { visible($0) && matches($0) }.sorted(using: sort) }
 
         let parents = parentMap()

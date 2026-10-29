@@ -25,6 +25,11 @@ enum Cleaner {
         ["/System/", "/usr/", "/bin/", "/sbin/", "/Library/Apple/", "/private/var/db/"].contains { path.hasPrefix($0) }
     }
 
+    /// Parts of macOS the session depends on. Shown greyed out and never ended from Prune.
+    static func isCritical(_ p: ProcInfo) -> Bool {
+        p.id <= 1 || protectedNames.contains(p.name) || (!p.isApp && isSystemPath(p.path))
+    }
+
     static func isProtected(_ p: ProcInfo) -> Bool {
         p.id == getpid() || p.id <= 1 || p.isOtherUser || protectedNames.contains(p.name)
             || protectedNames.contains((p.path as NSString).lastPathComponent)
