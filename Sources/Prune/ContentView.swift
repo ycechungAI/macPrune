@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var store: ProcessStore
+    @EnvironmentObject private var firewall: FirewallStore
     @AppStorage("treeMode") private var treeMode = true
     @AppStorage("pinned") private var pinned = false
     @AppStorage("compact") private var compact = false
@@ -15,6 +16,7 @@ struct ContentView: View {
     @Local private var showInspector = true
     @Local private var killTargets: [pid_t] = []
     @Local private var plan: CleanPlan?
+    @Local private var showFirewall = false
     @Local private var window: NSWindow?
     @Local private var fullFrame: NSRect?
 
@@ -50,6 +52,20 @@ struct ContentView: View {
                 Text("Some of these belong to other users or to macOS itself, so you'll be asked for an admin password. Ending system services can break features until you restart.")
             } else {
                 Text("Quit lets the process clean up. Force Quit ends it immediately and may lose unsaved work.")
+            }
+        }
+        .sheet(isPresented: $showFirewall) {
+            FirewallSheet().environmentObject(firewall)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showFirewall)) { _ in showFirewall = true }
+        .task {
+            // Following blocked apps: block the new outside addresses they open (see FirewallStore.follow).
+            while !Task.isCancelled {
+                if !firewall.config.apps.isEmpty {
+                    let conns = await Net.allUserConnections().compactMap { c in c.remote.map { (pid: c.pid, remote: $0) } }
+                    await firewall.follow(conns, appOf: { store.appID(of: $0) })
+                }
+                try? await Task.sleep(for: .seconds(30))
             }
         }
         .sheet(item: $plan) { p in
@@ -104,6 +120,8 @@ struct ContentView: View {
                     .width(min: 70, ideal: 80)
                 TableColumn("% GPU", value: \.gpu) { p in cell(p) { Text(Fmt.percent(p.gpu)).monospacedDigit() } }
                     .width(min: 50, ideal: 60)
+                TableColumn("Net") { p in AppBlockButton(proc: p) }
+                    .width(min: 30, ideal: 34, max: 40)
             }
             .contextMenu(forSelectionType: pid_t.self) { pids in
                 contextMenu(for: pids)
@@ -190,6 +208,24 @@ struct ContentView: View {
 
     // MARK: Toolbar
 
+    private var firewallTint: Color {
+        if firewall.listsNeedUpdate { return .orange }
+        return switch firewall.status {
+        case .on: .green
+        case .paused: .orange
+        case .off: .primary
+        }
+    }
+
+    private var firewallHelp: String {
+        if firewall.listsNeedUpdate { return "Firewall: some block lists are more than a week old" }
+        return switch firewall.status {
+        case .on(let n): "Firewall on: blocking \(n) address\(n == 1 ? "" : "es and ranges")"
+        case .paused: "Firewall paused since your Mac restarted"
+        case .off: "Firewall: block hosts, known attackers or countries"
+        }
+    }
+
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
@@ -217,6 +253,11 @@ struct ContentView: View {
             }
             .help("Find heavy or suspicious processes")
             .disabled(store.scanning)
+            Button { showFirewall = true } label: {
+                Label("Firewall", systemImage: firewall.status == .off ? "hand.raised" : "hand.raised.fill")
+            }
+            .foregroundStyle(firewallTint)
+            .help(firewallHelp)
 
             if !compact {
                 Toggle(isOn: $showOthers) {

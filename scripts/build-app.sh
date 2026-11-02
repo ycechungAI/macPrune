@@ -12,6 +12,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Prune"
 strip -x "$APP/Contents/MacOS/Prune"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# The firewall helper runs as root through the password prompt; root:wheel-style read-only copy.
+cp Resources/firewall-helper.sh "$APP/Contents/Resources/firewall-helper.sh"
+chmod 555 "$APP/Contents/Resources/firewall-helper.sh"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -24,8 +27,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleExecutable</key><string>Prune</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleShortVersionString</key><string>0.2.0</string>
+    <key>CFBundleVersion</key><string>2</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
     <key>NSHighResolutionCapable</key><true/>

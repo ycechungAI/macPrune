@@ -107,6 +107,8 @@ struct InspectorView: View {
                             Text(c.remote ?? c.local).lineLimit(1).truncationMode(.middle)
                             Spacer()
                             Text(c.state.isEmpty ? "LISTEN" : c.state).foregroundStyle(c.isExternal ? .blue : .secondary)
+                            BlockHostButton(conn: c, processName: store.procs[c.pid]?.name ?? "This process")
+                                .frame(width: 16)
                         }
                     }
                 }

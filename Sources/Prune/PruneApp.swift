@@ -4,11 +4,13 @@ import SwiftUI
 @main
 struct PruneApp: App {
     @StateObject private var store = ProcessStore()
+    @StateObject private var firewall = FirewallStore()
 
     var body: some Scene {
         Window("Prune", id: "main") {
             ContentView()
                 .environmentObject(store)
+                .environmentObject(firewall)
         }
         .defaultSize(width: 1040, height: 640)
         .windowResizability(.contentMinSize)
@@ -17,11 +19,16 @@ struct PruneApp: App {
                 Button("Import Do Not Prune List…") { store.importKeep() }
                 Button("Export Do Not Prune List…") { store.exportKeep() }
             }
+            CommandGroup(after: .sidebar) {
+                Button("Firewall…") { NotificationCenter.default.post(name: .showFirewall, object: nil) }
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
+            }
         }
 
         Settings {
             SettingsView()
                 .environmentObject(store)
+                .environmentObject(firewall)
         }
     }
 }
@@ -87,8 +94,29 @@ enum Snapshot {
             }
         }
         guard let path = ProcessInfo.processInfo.environment["PRUNE_SNAPSHOT"] else { return }
+        // PRUNE_SNAPSHOT_SETTINGS=1 renders the Settings window instead of the main one.
+        let settings = ProcessInfo.processInfo.environment["PRUNE_SNAPSHOT_SETTINGS"] != nil
+        if settings {
+            // The real Settings view, in a window of its own (macOS has no public way to open Settings).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()
+                    .environmentObject(store).environmentObject(FirewallStore())))
+                w.identifier = NSUserInterfaceItemIdentifier("SettingsSnapshot")
+                w.makeKeyAndOrderFront(nil)
+            }
+        }
+        // PRUNE_SNAPSHOT_FIREWALL=1 opens the Firewall sheet and renders it.
+        let firewall = ProcessInfo.processInfo.environment["PRUNE_SNAPSHOT_FIREWALL"] != nil
+        if firewall {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                NotificationCenter.default.post(name: .showFirewall, object: nil)
+            }
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-            guard let view = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })?.contentView?.superview,
+            let window = firewall ? NSApp.windows.first { $0.isSheet && $0.isVisible } : settings
+                ? NSApp.windows.first { $0.isVisible && $0.identifier?.rawValue.contains("Settings") == true }
+                : NSApp.windows.first { $0.isVisible && $0.contentView != nil }
+            guard let view = window?.contentView?.superview,
                   let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
             view.cacheDisplay(in: view.bounds, to: rep)
             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))

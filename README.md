@@ -9,7 +9,7 @@ Activity Monitor gives you a long, flat list of names you don't recognize. macPr
 Then you can clean them up in one click.
 
 - **Native and light.** Written in Swift and SwiftUI with a 500 KB binary. It uses about 80 MB of memory and low single-digit CPU, and it pauses itself when you can't see it.
-- **Private.** No network access, no analytics, no accounts. Everything happens on your Mac.
+- **Private.** No analytics, no accounts. Everything happens on your Mac, and macPrune makes no network requests unless you turn on a firewall block list.
 - **Safe by design.** Nothing is ended without a checklist you review first, and core parts of macOS are never offered.
 
 ---
@@ -40,6 +40,18 @@ Sort by any column, search by name, PID or path, and switch between tree and fla
 
 Every clean opens a checklist first. Purge pre-checks only the strong signals, and never pre-checks the app you're currently using.
 
+### Firewall
+A gentle firewall, from [NanoWall](https://github.com/ycechungAI/NanoWall)'s Mac version: everything stays allowed, and macPrune blocks only what you choose.
+
+- **Block a host** from the connection map: click ✋ next to any outside connection of the selected process.
+- **Threat lists,** each opt-in: known attackers and malware (FireHOL Level 1, about 4,500 ranges chosen to avoid false alarms), botnet control servers (abuse.ch Feodo Tracker) and compromised hosts (Emerging Threats). Each one downloads when you turn it on.
+- **Countries:** opt-in, picked by name, from ipdeny.com's ranges.
+- **Updates:** Settings and the Firewall sheet show when each list was last downloaded. **Update Lists Now** fetches them again, and lists older than a week are flagged in orange. macPrune doesn't update them silently, because loading new rules asks for your password.
+
+Open it with the ✋ **Firewall** button in the toolbar, View ▸ Firewall… (⇧⌘F), or Settings ▸ Firewall. NanoWall's domain-name block lists aren't included: they work by editing `/etc/hosts` and `/etc/resolver`, which this gentle version never touches.
+
+Your local network can never be blocked: private, local and reserved ranges are always refused, by the app and again by the helper. Each change asks for your admin password, and nothing is installed. The rules go in macOS's own `com.apple` pf anchor, so `/etc/pf.conf` is never edited, and turning the firewall off removes exactly what macPrune added. pf forgets the rules when your Mac restarts; Settings ▸ Firewall then shows **Turn Back On**.
+
 ### Do Not Prune list
 Right-click any process and choose **Add to Do Not Prune List**. Protected processes are highlighted green and are never offered by any clean. Hide them all with one toggle to focus on everything else. You can **import and export** the list as plain text from Settings or the File menu, to back it up or move it to another Mac.
 
@@ -54,9 +66,32 @@ Pin the window above everything, including full-screen apps, or switch to **comp
 
 ---
 
+## Versions
+
+### 0.2.0 (in development)
+Adds a gentle **firewall**, brought over from [NanoWall](https://github.com/ycechungAI/NanoWall)'s Mac version. Everything stays allowed by default, and macPrune blocks only what you choose:
+
+- **A Firewall button** (✋) in the toolbar, also under View ▸ Firewall… (⇧⌘F). It's filled when blocking is on and turns orange when the lists need an update.
+- **Block an app's network:** a ✋ in the new **Net** column next to each process blocks every outside address the app (and its helpers) uses, and keeps blocking new ones while macPrune is open, asking for your password at most every 2 minutes. macOS's firewall can only block addresses, so those addresses are blocked for every app. Click the red hand to undo it.
+- **Block a host** from the connection map: click ✋ next to any outside connection of the selected process.
+- **Three opt-in threat lists:** known attackers and malware (FireHOL Level 1), botnet control servers (abuse.ch Feodo Tracker) and compromised hosts (Emerging Threats).
+- **Block countries,** picked by name.
+- **List updates:** each list shows when it was last downloaded, **Update Lists Now** fetches them all again, and lists more than a week old are flagged.
+- Your local network can never be blocked, `/etc/pf.conf` is never edited, and each change asks for your password. See [Firewall](#firewall) for how it works.
+- Tests: `scripts/test.sh` runs the Swift tests and the firewall helper's tests, no root needed.
+
+<p align="center"><img src="docs/screenshots/v0.2-firewall.png" width="440" alt="Settings ▸ Firewall in macPrune 0.2"></p>
+
+0.2.0 isn't released yet: build it from source (below).
+
+### 0.1.0 (released 2026-11-02)
+The first release: the process tree with its connection map, Quick Clean, Fresh Start and Purge, the Do Not Prune list, whole-Mac memory, always on top and compact mode. It makes no network requests at all.
+
+[Download macPrune 0.1.0](https://github.com/ycechungAI/macPrune/releases/tag/v0.1.0) (`macPrune.dmg`, macOS 14 or later, Apple Silicon). It isn't notarized yet, so the first time, right-click **Prune** and choose **Open**.
+
 ## Install
 
-macPrune isn't distributed as a signed download yet, so you build it yourself. It takes about a minute.
+The easiest way is the [0.1.0 download](https://github.com/ycechungAI/macPrune/releases/tag/v0.1.0). To get the newest version, build it yourself. It takes about a minute.
 
 **Requirements:** macOS 14 Sonoma or later, plus the Xcode Command Line Tools (full Xcode isn't needed).
 
@@ -111,7 +146,11 @@ Sources/Prune/
   CleanSheet.swift    Review checklist
   CompactView.swift   Compact top-10 mode
   SettingsView.swift  Settings window
+  Firewall.swift      Firewall: address checks, block lists, settings, the helper
+  FirewallViews.swift Settings ▸ Firewall and the ✋ button in the connection map
+Resources/firewall-helper.sh  Loads the block rules as root (through the password prompt)
 scripts/build-app.sh  Builds and ad-hoc signs build/Prune.app
+scripts/test.sh       Runs the Swift tests and Tests/helper-test.sh (no root needed)
 scripts/make-icon.swift  Draws Resources/AppIcon.icns (swift scripts/make-icon.swift)
 ```
 
