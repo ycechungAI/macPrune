@@ -203,13 +203,7 @@ struct FirewallSheet: View {
 extension ProcessStore {
     /// The app a process belongs to, for blocking: the app macOS holds responsible for it, so a
     /// browser's helpers count as the browser. nil when its path is unknown.
-    func blockIdentity(of p: ProcInfo) -> (id: String, name: String)? {
-        let owner = procs[p.responsible] ?? p
-        guard !owner.path.isEmpty else { return nil }
-        let id = AppIdentity.of(path: owner.path)
-        let name = id.hasSuffix(".app") ? ((id as NSString).lastPathComponent as NSString).deletingPathExtension : owner.name
-        return (id, name)
-    }
+    func blockIdentity(of p: ProcInfo) -> (id: String, name: String)? { AppIdentity.owner(of: p, in: procs) }
 
     func appID(of pid: pid_t) -> String? { procs[pid].flatMap { blockIdentity(of: $0)?.id } }
 }

@@ -151,8 +151,27 @@ Sources/Prune/
 Resources/firewall-helper.sh  Loads the block rules as root (through the password prompt)
 scripts/build-app.sh  Builds and ad-hoc signs build/Prune.app
 scripts/test.sh       Runs the Swift tests and Tests/helper-test.sh (no root needed)
+scripts/ci.sh         Local CI: syntax, tests, build, bundle checks, smoke test
 scripts/make-icon.swift  Draws Resources/AppIcon.icns (swift scripts/make-icon.swift)
 ```
+
+### Tests and local CI
+
+```bash
+./scripts/test.sh          # Swift tests and the firewall helper's tests (no root, no network)
+./scripts/ci.sh            # everything: syntax, tests, release build, bundle checks, smoke test
+./scripts/install-hooks.sh # optional: run ci.sh before every git push from this clone
+```
+
+`scripts/build-app.sh` (and so `make-dmg.sh`) runs the tests first and refuses to build if any fail.
+
+The firewall tests run end to end without root: the app's firewall code drives the real
+`firewall-helper.sh` in dry-run mode, so its own address checks and `pfctl -n` run for real, with
+downloads served from memory. They cover blocking and unblocking, a cancelled password prompt,
+helper errors, threat lists (private ranges skipped, caching, weekly staleness, Update Lists Now,
+failed downloads), countries, blocked apps and following (batching, the 2-minute limit, pausing),
+restarts, and that the app and the helper agree on every address. Only loading the rules into pf
+itself needs a person and an admin password.
 
 ### Developer switches
 
@@ -164,7 +183,7 @@ Prints what Quick Clean and Fresh Start would offer, then exits. Nothing is ende
 ```bash
 PRUNE_SNAPSHOT=/tmp/prune.png build/Prune.app/Contents/MacOS/Prune
 ```
-Renders the main window to a PNG five seconds after launch. This doesn't need Screen Recording permission.
+Renders the main window to a PNG five seconds after launch. This doesn't need Screen Recording permission. Add `PRUNE_SNAPSHOT_FIREWALL=1` or `PRUNE_SNAPSHOT_SETTINGS=1` to render the Firewall sheet or Settings instead.
 
 ## Roadmap
 

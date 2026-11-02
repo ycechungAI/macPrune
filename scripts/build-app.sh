@@ -3,6 +3,13 @@
 set -euo pipefail
 cd "${0:A:h}/.."
 
+# Test before build: a build that fails its tests never becomes an app (PRUNE_SKIP_TESTS=1 skips
+# this, for scripts/ci.sh, which has just run them).
+if [[ -z "${PRUNE_SKIP_TESTS:-}" ]]; then
+    ./scripts/test.sh > /tmp/prune-test-$$.log 2>&1 || { tail -40 /tmp/prune-test-$$.log; rm -f /tmp/prune-test-$$.log; echo "Tests failed; not building." >&2; exit 1; }
+    grep -E "Test run with|helper:" /tmp/prune-test-$$.log; rm -f /tmp/prune-test-$$.log
+fi
+
 swift build -c release --build-system native
 BIN="$(swift build -c release --build-system native --show-bin-path)/Prune"
 

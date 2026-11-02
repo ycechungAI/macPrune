@@ -196,6 +196,8 @@ import Testing
 
     @Test func off() {
         #expect(FirewallStatus.from(statusFile: "rules 0\nboot 500\n", bootTime: 500, enabled: false) == .off)
+        // Turned on, but the last host was just unblocked this boot: off, not "paused since a restart"
+        #expect(FirewallStatus.from(statusFile: "rules 0\nboot 500\n", bootTime: 500, enabled: true) == .off)
         #expect(FirewallStatus.from(statusFile: nil, bootTime: 500, enabled: false) == .off)
         #expect(FirewallStatus.bootTime() > 0)
     }

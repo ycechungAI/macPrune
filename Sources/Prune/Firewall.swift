@@ -168,6 +168,16 @@ enum AppIdentity {
         guard let r = path.range(of: ".app/") else { return path }
         return String(path[..<r.lowerBound]) + ".app"
     }
+
+    /// The app a process belongs to, for blocking: the app macOS holds responsible for it, so a
+    /// browser's helpers count as the browser. nil when its path is unknown.
+    static func owner(of p: ProcInfo, in procs: [pid_t: ProcInfo]) -> (id: String, name: String)? {
+        let owner = procs[p.responsible] ?? p
+        guard !owner.path.isEmpty else { return nil }
+        let id = of(path: owner.path)
+        let name = id.hasSuffix(".app") ? ((id as NSString).lastPathComponent as NSString).deletingPathExtension : owner.name
+        return (id, name)
+    }
 }
 
 struct FirewallConfig: Codable, Equatable {
@@ -230,7 +240,9 @@ enum FirewallStatus: Equatable {
             guard f.count == 2, let n = Int(f[1]) else { continue }
             if f[0] == "rules" { rules = n } else if f[0] == "boot" { boot = n }
         }
-        if rules > 0 && boot == bootTime { return .on(rules) }
+        // Written during this boot: it's exactly what's loaded now (0 rules = nothing to block).
+        if boot == bootTime { return rules > 0 ? .on(rules) : .off }
+        // From an earlier boot, or never written: pf has nothing loaded.
         return enabled ? .paused : .off
     }
 
@@ -305,9 +317,27 @@ final class FirewallStore: ObservableObject {
         return now.timeIntervalSince(updated) >= refreshAfter
     }
 
+    /// Runs the helper as root (the admin prompt); tests run it in dry-run mode instead.
+    typealias HelperRunner = ([String]) async -> Result<String, FirewallHelper.Failure>
+    /// Downloads a list: (body, HTTP status).
+    typealias Downloader = (URL) async throws -> (Data, Int)
+
+    private let statusPath: String
+    private let runHelper: HelperRunner
+    private let download: Downloader
+
     init(dir: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("macPrune")) {
+            .appendingPathComponent("macPrune"),
+         statusPath: String = FirewallHelper.statusPath,
+         runHelper: @escaping HelperRunner = FirewallHelper.run,
+         download: @escaping Downloader = { url in
+             let (data, response) = try await URLSession.shared.data(from: url)
+             return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
+         }) {
         self.dir = dir
+        self.statusPath = statusPath
+        self.runHelper = runHelper
+        self.download = download
         if let data = try? Data(contentsOf: configURL), let c = try? JSONDecoder().decode(FirewallConfig.self, from: data) {
             config = c
         }
@@ -315,7 +345,7 @@ final class FirewallStore: ObservableObject {
     }
 
     func refreshStatus() {
-        status = FirewallStatus.from(statusFile: try? String(contentsOfFile: FirewallHelper.statusPath, encoding: .utf8),
+        status = FirewallStatus.from(statusFile: try? String(contentsOfFile: statusPath, encoding: .utf8),
                                      bootTime: FirewallStatus.bootTime(), enabled: config.enabled)
     }
 
@@ -458,13 +488,13 @@ final class FirewallStore: ObservableObject {
             if entries.isEmpty {
                 // Nothing to block: remove the rules, unless they're already gone.
                 if status != .off || force {
-                    if case .failure(let f) = await FirewallHelper.run(["off"]) { fail(f); return false }
+                    if case .failure(let f) = await runHelper(["off"]) { fail(f); return false }
                 }
             } else {
                 let request = dir.appendingPathComponent("firewall-request.txt")
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
                 try (entries.joined(separator: "\n") + "\n").write(to: request, atomically: true, encoding: .utf8)
-                if case .failure(let f) = await FirewallHelper.run(["apply", request.path]) { fail(f); return false }
+                if case .failure(let f) = await runHelper(["apply", request.path]) { fail(f); return false }
             }
             config = new
             try JSONEncoder().encode(new).write(to: configURL, options: .atomic)
@@ -493,8 +523,8 @@ final class FirewallStore: ObservableObject {
             return text.split(separator: "\n").map(String.init)
         }
         do {
-            let (data, response) = try await URLSession.shared.data(from: list.url)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+            let (data, code) = try await download(list.url)
+            guard code == 200 else { throw URLError(.badServerResponse) }
             let entries = BlockList.parse(String(decoding: data, as: UTF8.self)).entries
             guard !entries.isEmpty else { throw URLError(.cannotParseResponse) }
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
