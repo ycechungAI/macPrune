@@ -9,6 +9,7 @@ let package = Package(
             name: "Prune",
             path: "Sources/Prune",
             linkerSettings: [.linkedFramework("IOKit"), .linkedFramework("AppKit")]
-        )
+        ),
+        .testTarget(name: "PruneTests", dependencies: ["Prune"], path: "Tests/PruneTests"),
     ]
 )

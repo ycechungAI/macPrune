@@ -46,6 +46,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            FirewallSection()
             Section {
                 if store.keep.isEmpty {
                     Text("Nothing protected yet. Right-click a process and choose Add to Do Not Prune List. Quick Clean and Purge will never offer it.")
